@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Social Battery Check-in</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Paho MQTT WebSocket Client -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Tactile Battery Range Slider */
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      background: transparent;
+    }
+    input[type=range]:focus {
+      outline: none;
+    }
+    input[type=range]::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 16px;
+      cursor: pointer;
+      background: #e2e8f0;
+      border-radius: 9999px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      height: 34px;
+      width: 34px;
+      border-radius: 50%;
+      background: #10b981;
+      cursor: pointer;
+      -webkit-appearance: none;
+      margin-top: -9px;
+      box-shadow: 0 4px 10px -1px rgba(16, 185, 129, 0.4), 0 2px 4px -1px rgba(16, 185, 129, 0.2);
+      border: 3.5px solid #ffffff;
+      transition: transform 0.15s ease, background 0.2s ease;
+    }
+    input[type=range]::-webkit-slider-thumb:active {
+      transform: scale(1.18);
+    }
+
+    /* Liquid wave inside battery */
+    .battery-liquid {
+      transition: width 0.7s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.5s ease;
+    }
+
+    /* Dot pulse animation */
+    .pulse-dot {
+      animation: pulseAnim 1.8s infinite;
+    }
+    @keyframes pulseAnim {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.1); opacity: 1; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+  </style>
+</head>
+<body class="bg-[#f1f5f9] text-slate-800 min-h-screen flex flex-col justify-between selection:bg-emerald-100 selection:text-emerald-900">
+
+  <!-- ========================================== -->
+  <!-- TEACHER / PROJECTOR BIG SCREEN VIEW        -->
+  <!-- ========================================== -->
+  <div id="teacherView" class="flex-1 flex flex-col justify-between w-full min-h-screen p-4 sm:p-6 lg:p-8">
+    
+    <!-- Top Bar Navigation & Stats -->
+    <header class="w-full max-w-7xl mx-auto flex items-center justify-between pb-4 border-b border-slate-200">
+      <div class="flex items-center space-x-3">
+        <a href="index.html" class="flex items-center space-x-2 text-xs font-semibold text-slate-500 hover:text-emerald-600 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-xs hover:border-emerald-300 transition-colors">
+          <span>← Hub</span>
+        </a>
+        <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+        <span class="text-xs font-semibold text-slate-600 tracking-wide uppercase">Room Code:</span>
+        <span id="displayRoomCode" class="font-mono font-bold text-sm bg-white border border-slate-200 px-2.5 py-0.5 rounded-lg text-emerald-600 shadow-xs">Loading...</span>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <div class="bg-white border border-slate-200 px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-600 shadow-xs flex items-center space-x-2">
+          <span>Checked In:</span>
+          <span id="responseCounter" class="font-bold text-emerald-600 text-sm">0</span>
+        </div>
+        <button id="resetSessionBtn" class="text-xs font-medium text-rose-600 hover:text-rose-700 bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-200 px-3.5 py-1.5 rounded-xl transition-colors shadow-xs">
+          Reset Battery
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area: Large Battery Graphic + Stats Column -->
+    <main class="flex-1 flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-14 my-6 max-w-7xl mx-auto w-full">
+      
+      <!-- Left: Giant Animated Battery Display -->
+      <div class="flex flex-col items-center justify-center w-full max-w-xl">
+        
+        <!-- Large Glass Battery Container -->
+        <div class="relative flex items-center justify-center w-full px-4 sm:px-8">
+          
+          <!-- Outer Battery Shell -->
+          <div class="relative w-full max-w-[480px] h-52 sm:h-64 bg-white/90 border-4 border-slate-800 rounded-[2.5rem] p-3.5 shadow-2xl backdrop-blur-sm flex items-center overflow-hidden">
+            
+            <!-- Interior Glow / Grid Background -->
+            <div class="absolute inset-0 bg-slate-50/50 flex divide-x divide-slate-200/40 pointer-events-none">
+              <div class="flex-1"></div>
+              <div class="flex-1"></div>
+              <div class="flex-1"></div>
+              <div class="flex-1"></div>
+            </div>
+
+            <!-- Dynamic Fluid Fill Bar -->
+            <div id="bigBatteryFill" class="battery-liquid h-full rounded-[1.8rem] bg-gradient-to-r from-emerald-500 to-teal-400 relative z-10 flex items-center justify-end pr-4 shadow-lg shadow-emerald-500/20" style="width: 0%;">
+              <!-- Light shimmer effect -->
+              <div class="absolute top-0 left-0 right-0 h-1/2 bg-white/20 rounded-t-[1.8rem]"></div>
+            </div>
+
+            <!-- Center Overlay Content -->
+            <div class="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none select-none">
+              <div class="flex items-baseline space-x-1 drop-shadow-sm">
+                <span id="bigBatteryPercent" class="text-6xl sm:text-7xl font-black tracking-tight text-slate-800">--</span>
+                <span class="text-3xl sm:text-4xl font-extrabold text-slate-700">%</span>
+              </div>
+              <span id="bigBatteryStatus" class="text-xs sm:text-sm font-bold uppercase tracking-widest text-slate-500 mt-1">
+                Awaiting Responses...
+              </span>
+            </div>
+
+          </div>
+
+          <!-- Battery Terminal Cathode (+) -->
+          <div class="w-4 sm:w-5 h-20 sm:h-24 bg-slate-800 rounded-r-2xl -ml-1 shadow-md"></div>
+        </div>
+
+        <!-- 4-Stage Distribution Tally Below Battery -->
+        <div class="grid grid-cols-4 gap-3 w-full max-w-[500px] mt-6 px-2">
+          
+          <!-- Critical (0-25%) -->
+          <div class="bg-white border border-slate-200 rounded-2xl p-3 text-center shadow-xs">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-rose-500 block">Critical</span>
+            <div class="flex items-center justify-center gap-1 mt-1">
+              <span class="text-lg">🪫</span>
+              <span id="tallyCritical" class="text-lg font-black text-slate-800">0</span>
+            </div>
+            <span class="text-[10px] text-slate-400">0 - 25%</span>
+          </div>
+
+          <!-- Low (26-50%) -->
+          <div class="bg-white border border-slate-200 rounded-2xl p-3 text-center shadow-xs">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-amber-500 block">Low</span>
+            <div class="flex items-center justify-center gap-1 mt-1">
+              <span class="text-lg">🔋</span>
+              <span id="tallyLow" class="text-lg font-black text-slate-800">0</span>
+            </div>
+            <span class="text-[10px] text-slate-400">26 - 50%</span>
+          </div>
+
+          <!-- Good (51-75%) -->
+          <div class="bg-white border border-slate-200 rounded-2xl p-3 text-center shadow-xs">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-teal-600 block">Balanced</span>
+            <div class="flex items-center justify-center gap-1 mt-1">
+              <span class="text-lg">⚡</span>
+              <span id="tallyGood" class="text-lg font-black text-slate-800">0</span>
+            </div>
+            <span class="text-[10px] text-slate-400">51 - 75%</span>
+          </div>
+
+          <!-- Full (76-100%) -->
+          <div class="bg-white border border-slate-200 rounded-2xl p-3 text-center shadow-xs">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-600 block">Full</span>
+            <div class="flex items-center justify-center gap-1 mt-1">
+              <span class="text-lg">🚀</span>
+              <span id="tallyFull" class="text-lg font-black text-slate-800">0</span>
+            </div>
+            <span class="text-[10px] text-slate-400">76 - 100%</span>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Right: Mentimeter Header + Live iPad QR Join Card -->
+      <div class="flex flex-col items-start justify-center max-w-md w-full space-y-6">
+        
+        <!-- Mentimeter Header Badge -->
+        <div class="flex items-center space-x-4">
+          <div class="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shadow-md shadow-emerald-200">
+            2
+          </div>
+          <div>
+            <h2 class="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight leading-snug">
+              What is your battery level today?
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">Honest check-in on our collective capacity</p>
+          </div>
+        </div>
+
+        <!-- QR Code Join Card -->
+        <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm w-full flex items-center gap-5">
+          <div class="flex-shrink-0 bg-white p-2 border border-slate-100 rounded-2xl shadow-xs">
+            <img id="projectorQrCode" src="" alt="Scan QR Code" class="w-28 h-28 object-contain rounded-lg">
+          </div>
+          <div class="space-y-1.5 flex-1">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <p class="text-xs font-bold uppercase tracking-wider text-emerald-700">Scan on iPad</p>
+            </div>
+            <p class="text-xs text-slate-500 leading-snug">
+              Point your iPad camera at this QR code to adjust your battery percentage.
+            </p>
+            <div class="pt-1">
+              <span class="text-[11px] text-slate-400 font-mono bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                Auto-joins Room
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Student Mini Avatars / Realtime Stream -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 w-full shadow-xs">
+          <div class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+            <span>Recent Responses</span>
+            <span id="streamCounter" class="text-emerald-600">0 submitted</span>
+          </div>
+          <div id="recentStudentsList" class="flex flex-wrap gap-2 min-h-[38px] items-center text-xs text-slate-400">
+            <span class="italic text-[11px]">Responses will appear here live as students submit...</span>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full text-center text-xs text-slate-400 py-2">
+      Social Battery Check-in • Real-time WebSocket Sync
+    </footer>
+
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- STUDENT IPAD RESPONSE VIEW                 -->
+  <!-- ========================================== -->
+  <div id="studentView" class="hidden flex-1 flex flex-col justify-between max-w-lg mx-auto w-full p-4 sm:p-6 min-h-screen">
+    
+    <!-- Top Bar -->
+    <header class="flex items-center justify-between pb-3 border-b border-slate-200">
+      <div class="flex items-center space-x-2">
+        <span class="text-base font-black text-emerald-600">🔋 Advisory Battery</span>
+      </div>
+      <div id="studentConnStatus" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Connected
+      </div>
+    </header>
+
+    <!-- Student Interactive Body -->
+    <main class="my-auto py-6 space-y-6">
+      
+      <div>
+        <h2 class="text-2xl font-bold text-slate-900 tracking-tight">What is your battery at?</h2>
+        <p class="text-xs text-slate-500 mt-1">Slide the battery level to match where you're really at right now.</p>
+      </div>
+
+      <!-- Interactive Battery Preview Card -->
+      <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col items-center space-y-6">
+        
+        <!-- Live Visual Battery Container -->
+        <div class="relative flex items-center justify-center w-full px-2">
+          <div class="relative w-full max-w-[280px] h-28 bg-slate-50 border-3 border-slate-800 rounded-3xl p-2 shadow-inner flex items-center overflow-hidden">
+            <!-- Fluid Fill -->
+            <div id="studentBatteryFill" class="battery-liquid h-full rounded-2xl bg-emerald-500 flex items-center justify-end shadow-sm" style="width: 50%;"></div>
+            <!-- Percentage Display Inside -->
+            <div class="absolute inset-0 flex items-center justify-center font-black text-3xl text-slate-800 drop-shadow-sm select-none">
+              <span id="studentPercentText">50</span>%
+            </div>
+          </div>
+          <div class="w-2.5 h-10 bg-slate-800 rounded-r-lg -ml-0.5"></div>
+        </div>
+
+        <!-- Range Slider -->
+        <div class="w-full space-y-2">
+          <input type="range" id="studentBatterySlider" min="0" max="100" step="5" value="50" class="w-full">
+          <div class="flex justify-between text-[11px] font-semibold text-slate-400 px-1">
+            <span>0% (Empty)</span>
+            <span>50% (Surviving)</span>
+            <span>100% (Fully Charged)</span>
+          </div>
+        </div>
+
+        <!-- Dynamic Status Tag Pill -->
+        <div id="batteryStatusPill" class="px-4 py-1.5 rounded-full text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200">
+          🔋 Running Smoothly (50%)
+        </div>
+
+      </div>
+
+      <!-- Optional Name Input -->
+      <div class="bg-white border border-slate-200 rounded-3xl p-4 shadow-sm">
+        <input type="text" id="studentNameInput" placeholder="Optional: First name or nickname" maxlength="15" class="w-full text-sm bg-transparent outline-none text-slate-800 placeholder-slate-400">
+      </div>
+
+      <!-- Submit Button -->
+      <button id="submitBatteryBtn" class="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-base shadow-lg shadow-emerald-200 transition-all flex items-center justify-center space-x-2">
+        <span>Post to Classroom Battery</span>
+        <span>⚡</span>
+      </button>
+
+      <!-- Confirmation Toast -->
+      <div id="submitSuccessCard" class="hidden bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-center space-y-1">
+        <div class="text-sm font-bold">Charge Logged! Look up at the screen! 🔋</div>
+        <p class="text-xs text-emerald-600">You can adjust your slider anytime if your energy shifts.</p>
+      </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center text-xs text-slate-400 py-3">
+      Advisory Check-in • Safe & Respectful
+    </footer>
+
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT LOGIC                           -->
+  <!-- ========================================== -->
+  <script>
+    // Configuration & State
+    const urlParams = new URLSearchParams(window.location.search);
+    const isStudent = urlParams.get('role') === 'student';
+    let roomCode = urlParams.get('room');
+    let responses = [];
+
+    // MQTT Setup
+    let mqttClient = null;
+    const MQTT_BROKER = 'broker.hivemq.com';
+    const MQTT_PORT = 8884; // Secure WSS
+
+    // Role Router
+    if (isStudent) {
+      document.getElementById('teacherView').classList.add('hidden');
+      document.getElementById('studentView').classList.remove('hidden');
+      setupStudentView();
+    } else {
+      setupTeacherView();
+    }
+
+    // ==========================================
+    // TEACHER LOGIC
+    // ==========================================
+    function setupTeacherView() {
+      // 1. Generate room code
+      if (!roomCode) {
+        roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+      }
+      document.getElementById('displayRoomCode').innerText = roomCode;
+
+      // 2. Generate QR code pointing to student view
+      const currentUrl = window.location.href.split('?')[0];
+      const studentJoinUrl = `${currentUrl}?role=student&room=${roomCode}`;
+      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(studentJoinUrl)}&margin=4`;
+      document.getElementById('projectorQrCode').src = qrApiUrl;
+
+      // 3. Connect MQTT
+      connectMQTT(`class-battery-${roomCode}`, (msg) => {
+        try {
+          const data = JSON.parse(msg);
+          if (data.type === 'vote') {
+            addOrUpdateResponse(data);
+          } else if (data.type === 'reset') {
+            responses = [];
+            renderBigBattery();
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      });
+
+      // 4. Reset Button
+      document.getElementById('resetSessionBtn').addEventListener('click', () => {
+        responses = [];
+        renderBigBattery();
+        publishMessage({ type: 'reset' });
+      });
+    }
+
+    function addOrUpdateResponse(data) {
+      const idx = responses.findIndex(r => r.id === data.id);
+      if (idx >= 0) {
+        responses[idx] = data;
+      } else {
+        responses.push(data);
+      }
+      renderBigBattery();
+    }
+
+    function renderBigBattery() {
+      const count = responses.length;
+      document.getElementById('responseCounter').innerText = count;
+      document.getElementById('streamCounter').innerText = `${count} submitted`;
+
+      const fillEl = document.getElementById('bigBatteryFill');
+      const percentEl = document.getElementById('bigBatteryPercent');
+      const statusEl = document.getElementById('bigBatteryStatus');
+      const listEl = document.getElementById('recentStudentsList');
+
+      let tallyCrit = 0, tallyLow = 0, tallyGood = 0, tallyFull = 0;
+
+      if (count === 0) {
+        fillEl.style.width = '0%';
+        percentEl.innerText = '--';
+        statusEl.innerText = 'Awaiting Responses...';
+        document.getElementById('tallyCritical').innerText = '0';
+        document.getElementById('tallyLow').innerText = '0';
+        document.getElementById('tallyGood').innerText = '0';
+        document.getElementById('tallyFull').innerText = '0';
+        listEl.innerHTML = '<span class="italic text-[11px]">Responses will appear here live as students submit...</span>';
+        return;
+      }
+
+      let totalPct = 0;
+      listEl.innerHTML = '';
+
+      responses.forEach(r => {
+        const val = parseInt(r.battery);
+        totalPct += val;
+
+        if (val <= 25) tallyCrit++;
+        else if (val <= 50) tallyLow++;
+        else if (val <= 75) tallyGood++;
+        else tallyFull++;
+
+        // Add to recent badges
+        const badge = document.createElement('span');
+        badge.className = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-xs animate-fadeIn';
+        badge.innerHTML = `
+          <span>${r.name ? r.name : 'Anonymous'}</span>
+          <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded-md">${val}%</span>
+        `;
+        listEl.appendChild(badge);
+      });
+
+      document.getElementById('tallyCritical').innerText = tallyCrit;
+      document.getElementById('tallyLow').innerText = tallyLow;
+      document.getElementById('tallyGood').innerText = tallyGood;
+      document.getElementById('tallyFull').innerText = tallyFull;
+
+      const avg = Math.round(totalPct / count);
+      fillEl.style.width = `${avg}%`;
+      percentEl.innerText = avg;
+
+      // Color Shift based on class average
+      if (avg <= 25) {
+        fillEl.className = 'battery-liquid h-full rounded-[1.8rem] bg-gradient-to-r from-rose-500 to-red-400 relative z-10 flex items-center justify-end pr-4 shadow-lg shadow-rose-500/20';
+        statusEl.innerText = 'Class Running on Critical 🪫';
+        statusEl.className = 'text-xs sm:text-sm font-bold uppercase tracking-widest text-rose-600 mt-1';
+      } else if (avg <= 50) {
+        fillEl.className = 'battery-liquid h-full rounded-[1.8rem] bg-gradient-to-r from-amber-500 to-orange-400 relative z-10 flex items-center justify-end pr-4 shadow-lg shadow-amber-500/20';
+        statusEl.innerText = 'Moderate Charge • Pacing Ourselves 🔋';
+        statusEl.className = 'text-xs sm:text-sm font-bold uppercase tracking-widest text-amber-600 mt-1';
+      } else if (avg <= 75) {
+        fillEl.className = 'battery-liquid h-full rounded-[1.8rem] bg-gradient-to-r from-teal-500 to-emerald-400 relative z-10 flex items-center justify-end pr-4 shadow-lg shadow-teal-500/20';
+        statusEl.innerText = 'Solid Charge • Balanced & Ready ⚡';
+        statusEl.className = 'text-xs sm:text-sm font-bold uppercase tracking-widest text-teal-600 mt-1';
+      } else {
+        fillEl.className = 'battery-liquid h-full rounded-[1.8rem] bg-gradient-to-r from-emerald-500 to-green-400 relative z-10 flex items-center justify-end pr-4 shadow-lg shadow-emerald-500/20';
+        statusEl.innerText = 'Fully Supercharged! 🚀';
+        statusEl.className = 'text-xs sm:text-sm font-bold uppercase tracking-widest text-emerald-600 mt-1';
+      }
+    }
+
+    // ==========================================
+    // STUDENT IPAD LOGIC
+    // ==========================================
+    function setupStudentView() {
+      const slider = document.getElementById('studentBatterySlider');
+      const text = document.getElementById('studentPercentText');
+      const fill = document.getElementById('studentBatteryFill');
+      const pill = document.getElementById('batteryStatusPill');
+      const submitBtn = document.getElementById('submitBatteryBtn');
+      const nameInput = document.getElementById('studentNameInput');
+      const toast = document.getElementById('submitSuccessCard');
+
+      // Unique device ID
+      let studentId = localStorage.getItem('checkin_student_id');
+      if (!studentId) {
+        studentId = 'std_' + Math.random().toString(36).substring(2, 9);
+        localStorage.setItem('checkin_student_id', studentId);
+      }
+
+      function updateStudentUI(val) {
+        text.innerText = val;
+        fill.style.width = `${val}%`;
+
+        if (val <= 25) {
+          fill.className = 'battery-liquid h-full rounded-2xl bg-rose-500 shadow-sm';
+          pill.className = 'px-4 py-1.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200';
+          pill.innerText = `🪫 Critical Battery (${val}%) — Need rest`;
+        } else if (val <= 50) {
+          fill.className = 'battery-liquid h-full rounded-2xl bg-amber-500 shadow-sm';
+          pill.className = 'px-4 py-1.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200';
+          pill.innerText = `🔋 Low / Surviving (${val}%) — Holding on`;
+        } else if (val <= 75) {
+          fill.className = 'battery-liquid h-full rounded-2xl bg-teal-500 shadow-sm';
+          pill.className = 'px-4 py-1.5 rounded-full text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200';
+          pill.innerText = `⚡ Good Charge (${val}%) — Ready to learn`;
+        } else {
+          fill.className = 'battery-liquid h-full rounded-2xl bg-emerald-500 shadow-sm';
+          pill.className = 'px-4 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200';
+          pill.innerText = `🚀 Supercharged (${val}%) — Ready to conquer!`;
+        }
+      }
+
+      slider.addEventListener('input', (e) => updateStudentUI(parseInt(e.target.value)));
+      updateStudentUI(50);
+
+      // Connect MQTT
+      connectMQTT(`class-battery-${roomCode}`);
+
+      // Submit vote
+      submitBtn.addEventListener('click', () => {
+        const payload = {
+          type: 'vote',
+          id: studentId,
+          battery: parseInt(slider.value),
+          name: nameInput.value.trim()
+        };
+
+        publishMessage(payload);
+        toast.classList.remove('hidden');
+        submitBtn.innerText = 'Update My Charge on Board ⚡';
+      });
+    }
+
+    // ==========================================
+    // SHARED SECURE MQTT WEBSOCKET CONNECTION
+    // ==========================================
+    function connectMQTT(topic, onMessageCallback) {
+      const clientId = 'client_bat_' + Math.random().toString(16).substr(2, 8);
+      mqttClient = new Paho.MQTT.Client(MQTT_BROKER, MQTT_PORT, clientId);
+
+      mqttClient.onConnectionLost = (responseObject) => {
+        if (responseObject.errorCode !== 0) {
+          setTimeout(() => connectMQTT(topic, onMessageCallback), 2000);
+        }
+      };
+
+      if (onMessageCallback) {
+        mqttClient.onMessageArrived = (message) => {
+          onMessageCallback(message.payloadString);
+        };
+      }
+
+      mqttClient.connect({
+        useSSL: true,
+        timeout: 5,
+        onSuccess: () => {
+          mqttClient.subscribe(topic);
+        },
+        onFailure: () => {
+          setTimeout(() => connectMQTT(topic, onMessageCallback), 3000);
+        }
+      });
+    }
+
+    function publishMessage(obj) {
+      if (!mqttClient || !mqttClient.isConnected()) return;
+      const message = new Paho.MQTT.Message(JSON.stringify(obj));
+      message.destinationName = `class-battery-${roomCode}`;
+      mqttClient.send(message);
+    }
+  </script>
+</body>
+</html>
