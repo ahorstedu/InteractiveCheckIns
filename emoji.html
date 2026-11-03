@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Which Emoji Are You Today? Check-in</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Paho MQTT WebSocket Client -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .tally-bar {
+      transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .emoji-pop {
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .emoji-pop:hover {
+      transform: scale(1.08);
+    }
+    .emoji-pop:active {
+      transform: scale(0.95);
+    }
+
+    @keyframes voteGlow {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.06); }
+      100% { transform: scale(1); }
+    }
+    .vote-bump {
+      animation: voteGlow 0.35s ease-out;
+    }
+  </style>
+</head>
+<body class="bg-[#fffbeb] text-slate-800 min-h-screen flex flex-col justify-between selection:bg-amber-100 selection:text-amber-900">
+
+  <!-- ========================================== -->
+  <!-- TEACHER / PROJECTOR BIG SCREEN VIEW        -->
+  <!-- ========================================== -->
+  <div id="teacherView" class="flex-1 flex flex-col justify-between w-full min-h-screen p-4 sm:p-6 lg:p-8">
+    
+    <!-- Top Bar Navigation & Stats -->
+    <header class="w-full max-w-7xl mx-auto flex items-center justify-between pb-4 border-b border-amber-200/80">
+      <div class="flex items-center space-x-3">
+        <a href="index.html" class="flex items-center space-x-2 text-xs font-semibold text-slate-500 hover:text-amber-600 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-xs hover:border-amber-300 transition-colors">
+          <span>← Hub</span>
+        </a>
+        <div class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></div>
+        <span class="text-xs font-semibold text-slate-600 tracking-wide uppercase">Room Code:</span>
+        <span id="displayRoomCode" class="font-mono font-bold text-sm bg-white border border-slate-200 px-2.5 py-0.5 rounded-lg text-amber-600 shadow-xs">Loading...</span>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <div class="bg-white border border-slate-200 px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-600 shadow-xs flex items-center space-x-2">
+          <span>Total Votes:</span>
+          <span id="responseCounter" class="font-bold text-amber-600 text-sm">0</span>
+        </div>
+        <button id="resetSessionBtn" class="text-xs font-medium text-rose-600 hover:text-rose-700 bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-200 px-3.5 py-1.5 rounded-xl transition-colors shadow-xs">
+          Reset Votes
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area: 6-Card Grid + QR Card -->
+    <main class="flex-1 flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-12 my-4 max-w-7xl mx-auto w-full">
+      
+      <!-- Left: 6 Emoji Vote Cards Grid -->
+      <div class="flex-1 w-full max-w-3xl">
+        <div id="emojiGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-5">
+          <!-- Dynamically generated emoji cards -->
+        </div>
+      </div>
+
+      <!-- Right: Mentimeter Header + Live iPad QR Join Card -->
+      <div class="flex flex-col items-start justify-center max-w-md w-full space-y-6">
+        
+        <!-- Mentimeter Header Badge -->
+        <div class="flex items-center space-x-4">
+          <div class="w-10 h-10 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-lg shadow-md shadow-amber-200">
+            4
+          </div>
+          <div>
+            <h2 class="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight leading-snug">
+              Which emoji are you today?
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">Pick the emoji that matches your mood right now</p>
+          </div>
+        </div>
+
+        <!-- Join Box with Dynamic QR Code -->
+        <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm w-full flex items-center gap-5">
+          <div class="flex-shrink-0 bg-white p-2 border border-slate-100 rounded-2xl shadow-xs">
+            <img id="projectorQrCode" src="" alt="Scan QR Code" class="w-28 h-28 object-contain rounded-lg">
+          </div>
+          <div class="space-y-1.5 flex-1">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+              <p class="text-xs font-bold uppercase tracking-wider text-amber-700">Scan on iPad</p>
+            </div>
+            <p class="text-xs text-slate-500 leading-snug">
+              Point your iPad camera at this code to choose your emoji for the board.
+            </p>
+            <div class="pt-1">
+              <span class="text-[11px] text-slate-400 font-mono bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                Auto-joins Room
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Leading Mood Pill Card -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 w-full shadow-xs flex items-center justify-between">
+          <div class="space-y-0.5">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Classroom Consensus</span>
+            <div id="leadingMoodText" class="text-sm font-bold text-slate-700">Awaiting votes...</div>
+          </div>
+          <div id="leadingEmojiDisplay" class="text-3xl">🗳️</div>
+        </div>
+
+        <!-- Realtime Student Feed -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 w-full shadow-xs">
+          <div class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+            <span>Recent Votes</span>
+            <span id="streamCounter" class="text-amber-600">0 voted</span>
+          </div>
+          <div id="recentVotersList" class="flex flex-wrap gap-1.5 min-h-[38px] items-center text-xs text-slate-400">
+            <span class="italic text-[11px]">Votes will appear here as students tap...</span>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full text-center text-xs text-slate-400 py-2">
+      Which Emoji Are You Today? • Real-time WebSocket Sync
+    </footer>
+
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- STUDENT IPAD RESPONSE VIEW                 -->
+  <!-- ========================================== -->
+  <div id="studentView" class="hidden flex-1 flex flex-col justify-between max-w-lg mx-auto w-full p-4 sm:p-6 min-h-screen">
+    
+    <!-- Top Bar -->
+    <header class="flex items-center justify-between pb-3 border-b border-slate-200">
+      <div class="flex items-center space-x-2">
+        <span class="text-base font-black text-amber-600">✨ Emoji Check-in</span>
+      </div>
+      <div id="studentConnStatus" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Connected
+      </div>
+    </header>
+
+    <!-- Student Interactive Body -->
+    <main class="my-auto py-6 space-y-6">
+      
+      <div>
+        <h2 class="text-2xl font-bold text-slate-900 tracking-tight">Which emoji are you today?</h2>
+        <p class="text-xs text-slate-500 mt-1">Tap the emoji card that matches your mood right now.</p>
+      </div>
+
+      <!-- Emoji Choice Grid -->
+      <div id="studentEmojiPicker" class="grid grid-cols-2 gap-3.5">
+        <!-- Generated in JS -->
+      </div>
+
+      <!-- Optional Nickname -->
+      <div class="bg-white border border-slate-200 rounded-3xl p-4 shadow-sm">
+        <input type="text" id="studentNameInput" placeholder="Optional: First name or nickname" maxlength="15" class="w-full text-sm bg-transparent outline-none text-slate-800 placeholder-slate-400">
+      </div>
+
+      <!-- Submit Button -->
+      <button id="submitVoteBtn" class="w-full py-4 rounded-2xl bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-white font-bold text-base shadow-lg shadow-amber-200 transition-all flex items-center justify-center space-x-2">
+        <span>Cast My Emoji Vote</span>
+        <span>✨</span>
+      </button>
+
+      <!-- Confirmation Toast -->
+      <div id="submitSuccessCard" class="hidden bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-center space-y-1">
+        <div class="text-sm font-bold">Vote Counted! Look up at the board! 🎯</div>
+        <p class="text-xs text-emerald-600">You can tap another emoji anytime if your mood shifts.</p>
+      </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center text-xs text-slate-400 py-3">
+      Advisory Check-in • Safe & Respectful
+    </footer>
+
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT LOGIC                           -->
+  <!-- ========================================== -->
+  <script>
+    // 6 Curated Advisory Emoji Mood Cards
+    const EMOJI_OPTIONS = [
+      { id: 'tired', num: '1', emoji: '😴', label: 'Exhausted', desc: 'Running on fumes, need sleep' },
+      { id: 'coffee', num: '2', emoji: '☕', label: 'Caffeinated', desc: 'Sipping fuel, powering through' },
+      { id: 'melting', num: '3', emoji: '🫠', label: 'Overwhelmed', desc: 'Holding it together barely' },
+      { id: 'cool', num: '4', emoji: '😎', label: 'Locked In', desc: 'Cruising smoothly, in the zone' },
+      { id: 'chaotic', num: '5', emoji: '🤪', label: 'Chaotic Good', desc: 'A little silly, high energy' },
+      { id: 'rocket', num: '6', emoji: '🚀', label: 'Unstoppable', desc: 'Ready to conquer whatever comes' }
+    ];
+
+    // Configuration & State
+    const urlParams = new URLSearchParams(window.location.search);
+    const isStudent = urlParams.get('role') === 'student';
+    let roomCode = urlParams.get('room');
+    
+    // Map of studentId -> emojiId
+    let votes = {};
+    let recentVoters = [];
+    let selectedStudentEmoji = null;
+
+    // MQTT Setup
+    let mqttClient = null;
+    const MQTT_BROKER = 'broker.hivemq.com';
+    const MQTT_PORT = 8884; // Secure WSS
+
+    // Role Router
+    if (isStudent) {
+      document.getElementById('teacherView').classList.add('hidden');
+      document.getElementById('studentView').classList.remove('hidden');
+      setupStudentView();
+    } else {
+      setupTeacherView();
+    }
+
+    // ==========================================
+    // TEACHER LOGIC
+    // ==========================================
+    function setupTeacherView() {
+      if (!roomCode) {
+        roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+      }
+      document.getElementById('displayRoomCode').innerText = roomCode;
+
+      // Generate QR
+      const currentUrl = window.location.href.split('?')[0];
+      const studentJoinUrl = `${currentUrl}?role=student&room=${roomCode}`;
+      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(studentJoinUrl)}&margin=4`;
+      document.getElementById('projectorQrCode').src = qrApiUrl;
+
+      // Render initial blank cards
+      renderTeacherCards();
+
+      // Connect MQTT
+      connectMQTT(`class-emoji-${roomCode}`, (msg) => {
+        try {
+          const data = JSON.parse(msg);
+          if (data.type === 'vote') {
+            votes[data.id] = { emojiId: data.emojiId, name: data.name };
+            recentVoters.unshift({ emoji: getEmojiChar(data.emojiId), name: data.name });
+            if (recentVoters.length > 12) recentVoters.pop();
+            updateTeacherTally(data.emojiId);
+          } else if (data.type === 'reset') {
+            votes = {};
+            recentVoters = [];
+            renderTeacherCards();
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      });
+
+      // Reset Button
+      document.getElementById('resetSessionBtn').addEventListener('click', () => {
+        votes = {};
+        recentVoters = [];
+        renderTeacherCards();
+        publishMessage({ type: 'reset' });
+      });
+    }
+
+    function getEmojiChar(id) {
+      const found = EMOJI_OPTIONS.find(e => e.id === id);
+      return found ? found.emoji : '✨';
+    }
+
+    function renderTeacherCards() {
+      const grid = document.getElementById('emojiGrid');
+      grid.innerHTML = '';
+
+      EMOJI_OPTIONS.forEach(item => {
+        const card = document.createElement('div');
+        card.id = `teacher-card-${item.id}`;
+        card.className = 'bg-white/95 border-2 border-amber-100 rounded-3xl p-4 sm:p-5 shadow-md flex flex-col justify-between relative overflow-hidden transition-all';
+        card.innerHTML = `
+          <!-- Card Header & Number Badge -->
+          <div class="flex items-center justify-between pb-2">
+            <span class="w-6 h-6 rounded-full bg-amber-100 text-amber-800 text-xs font-black flex items-center justify-center">
+              ${item.num}
+            </span>
+            <span id="tally-count-${item.id}" class="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
+              0 votes (0%)
+            </span>
+          </div>
+
+          <!-- Giant Centered Emoji -->
+          <div class="text-center py-2 sm:py-3">
+            <span class="text-5xl sm:text-6xl block select-none">${item.emoji}</span>
+            <h4 class="text-base sm:text-lg font-bold text-slate-800 mt-2">${item.label}</h4>
+            <p class="text-[11px] text-slate-400 mt-0.5 leading-tight">${item.desc}</p>
+          </div>
+
+          <!-- Progress Percentage Fill Bar -->
+          <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mt-3">
+            <div id="tally-bar-${item.id}" class="tally-bar h-full bg-amber-500 rounded-full" style="width: 0%;"></div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      updateTeacherTally();
+    }
+
+    function updateTeacherTally(lastVotedId = null) {
+      const totalVotes = Object.keys(votes).length;
+      document.getElementById('responseCounter').innerText = totalVotes;
+      document.getElementById('streamCounter').innerText = `${totalVotes} voted`;
+
+      // Count per option
+      const counts = {};
+      EMOJI_OPTIONS.forEach(opt => counts[opt.id] = 0);
+      Object.values(votes).forEach(v => {
+        if (counts[v.emojiId] !== undefined) counts[v.emojiId]++;
+      });
+
+      // Update card UI
+      let maxCount = 0;
+      let leadingOption = null;
+
+      EMOJI_OPTIONS.forEach(opt => {
+        const count = counts[opt.id];
+        const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+        
+        const countEl = document.getElementById(`tally-count-${opt.id}`);
+        const barEl = document.getElementById(`tally-bar-${opt.id}`);
+        const cardEl = document.getElementById(`teacher-card-${opt.id}`);
+
+        if (countEl) countEl.innerText = `${count} votes (${pct}%)`;
+        if (barEl) barEl.style.width = `${pct}%`;
+
+        if (count > maxCount) {
+          maxCount = count;
+          leadingOption = opt;
+        }
+
+        // Highlight active leaders
+        if (totalVotes > 0 && count === maxCount && count > 0) {
+          cardEl.classList.add('border-amber-400', 'bg-amber-50/40');
+        } else {
+          cardEl.classList.remove('border-amber-400', 'bg-amber-50/40');
+        }
+      });
+
+      // Optional pulse on last card voted
+      if (lastVotedId) {
+        const card = document.getElementById(`teacher-card-${lastVotedId}`);
+        if (card) {
+          card.classList.add('vote-bump');
+          setTimeout(() => card.classList.remove('vote-bump'), 400);
+        }
+      }
+
+      // Update Consensus
+      const leadingText = document.getElementById('leadingMoodText');
+      const leadingEmoji = document.getElementById('leadingEmojiDisplay');
+
+      if (totalVotes === 0 || !leadingOption) {
+        leadingText.innerText = 'Awaiting votes...';
+        leadingEmoji.innerText = '🗳️';
+      } else {
+        const leadPct = Math.round((maxCount / totalVotes) * 100);
+        leadingText.innerText = `${leadingOption.label} (${leadPct}%)`;
+        leadingEmoji.innerText = leadingOption.emoji;
+      }
+
+      // Render recent stream
+      const streamEl = document.getElementById('recentVotersList');
+      if (recentVoters.length === 0) {
+        streamEl.innerHTML = '<span class="italic text-[11px]">Votes will appear here as students tap...</span>';
+      } else {
+        streamEl.innerHTML = '';
+        recentVoters.forEach(r => {
+          const pill = document.createElement('span');
+          pill.className = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200';
+          pill.innerHTML = `<span>${r.emoji}</span><span>${r.name ? r.name : 'Anonymous'}</span>`;
+          streamEl.appendChild(pill);
+        });
+      }
+    }
+
+    // ==========================================
+    // STUDENT IPAD LOGIC
+    // ==========================================
+    function setupStudentView() {
+      const picker = document.getElementById('studentEmojiPicker');
+      const submitBtn = document.getElementById('submitVoteBtn');
+      const nameInput = document.getElementById('studentNameInput');
+      const toast = document.getElementById('submitSuccessCard');
+
+      // Unique device ID
+      let studentId = localStorage.getItem('checkin_student_id');
+      if (!studentId) {
+        studentId = 'std_' + Math.random().toString(36).substring(2, 9);
+        localStorage.setItem('checkin_student_id', studentId);
+      }
+
+      // Render clickable options
+      picker.innerHTML = '';
+      EMOJI_OPTIONS.forEach(item => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.id = `student-btn-${item.id}`;
+        btn.className = 'emoji-pop bg-white border-2 border-slate-200 hover:border-amber-400 rounded-3xl p-4 flex flex-col items-center justify-center text-center shadow-xs transition-all';
+        btn.innerHTML = `
+          <span class="text-4xl block">${item.emoji}</span>
+          <span class="text-sm font-bold text-slate-800 mt-2">${item.label}</span>
+          <span class="text-[10px] text-slate-400 mt-0.5 line-clamp-1">${item.desc}</span>
+        `;
+
+        btn.addEventListener('click', () => {
+          selectedStudentEmoji = item.id;
+          Array.from(picker.children).forEach(c => {
+            c.classList.remove('border-amber-500', 'bg-amber-50', 'ring-2', 'ring-amber-200');
+            c.classList.add('border-slate-200', 'bg-white');
+          });
+          btn.classList.remove('border-slate-200', 'bg-white');
+          btn.classList.add('border-amber-500', 'bg-amber-50', 'ring-2', 'ring-amber-200');
+        });
+
+        picker.appendChild(btn);
+      });
+
+      // Connect MQTT
+      connectMQTT(`class-emoji-${roomCode}`);
+
+      // Submit vote
+      submitBtn.addEventListener('click', () => {
+        if (!selectedStudentEmoji) {
+          submitBtn.classList.add('animate-bounce');
+          setTimeout(() => submitBtn.classList.remove('animate-bounce'), 600);
+          return;
+        }
+
+        const payload = {
+          type: 'vote',
+          id: studentId,
+          emojiId: selectedStudentEmoji,
+          name: nameInput.value.trim()
+        };
+
+        publishMessage(payload);
+        toast.classList.remove('hidden');
+        submitBtn.innerText = 'Update My Emoji on Board ✨';
+      });
+    }
+
+    // ==========================================
+    // SHARED SECURE MQTT WEBSOCKET CONNECTION
+    // ==========================================
+    function connectMQTT(topic, onMessageCallback) {
+      const clientId = 'client_emoji_' + Math.random().toString(16).substr(2, 8);
+      mqttClient = new Paho.MQTT.Client(MQTT_BROKER, MQTT_PORT, clientId);
+
+      mqttClient.onConnectionLost = (responseObject) => {
+        if (responseObject.errorCode !== 0) {
+          setTimeout(() => connectMQTT(topic, onMessageCallback), 2000);
+        }
+      };
+
+      if (onMessageCallback) {
+        mqttClient.onMessageArrived = (message) => {
+          onMessageCallback(message.payloadString);
+        };
+      }
+
+      mqttClient.connect({
+        useSSL: true,
+        timeout: 5,
+        onSuccess: () => {
+          mqttClient.subscribe(topic);
+        },
+        onFailure: () => {
+          setTimeout(() => connectMQTT(topic, onMessageCallback), 3000);
+        }
+      });
+    }
+
+    function publishMessage(obj) {
+      if (!mqttClient || !mqttClient.isConnected()) return;
+      const message = new Paho.MQTT.Message(JSON.stringify(obj));
+      message.destinationName = `class-emoji-${roomCode}`;
+      mqttClient.send(message);
+    }
+  </script>
+</body>
+</html>
