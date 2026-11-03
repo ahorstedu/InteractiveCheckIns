@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2x2 Energy & Excitement Check-in</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Paho MQTT WebSocket Client -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Slider thumb styling */
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      background: transparent;
+    }
+    input[type=range]:focus {
+      outline: none;
+    }
+    input[type=range]::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 12px;
+      cursor: pointer;
+      background: #e2e8f0;
+      border-radius: 9999px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      height: 28px;
+      width: 28px;
+      border-radius: 50%;
+      background: #4f46e5;
+      cursor: pointer;
+      -webkit-appearance: none;
+      margin-top: -8px;
+      box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.4), 0 2px 4px -1px rgba(79, 70, 229, 0.2);
+      border: 3px solid #ffffff;
+      transition: transform 0.1s ease;
+    }
+    input[type=range]::-webkit-slider-thumb:active {
+      transform: scale(1.15);
+    }
+
+    /* Animated plotted dot */
+    .student-dot {
+      transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+      animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+
+    @keyframes popIn {
+      0% { transform: translate(-50%, 50%) scale(0); opacity: 0; }
+      70% { transform: translate(-50%, 50%) scale(1.3); opacity: 1; }
+      100% { transform: translate(-50%, 50%) scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body class="bg-[#eef2f6] text-slate-800 min-h-screen flex flex-col justify-between selection:bg-indigo-100 selection:text-indigo-900">
+
+  <!-- ========================================== -->
+  <!-- TEACHER / PROJECTOR BIG SCREEN VIEW        -->
+  <!-- ========================================== -->
+  <div id="teacherView" class="flex-1 flex flex-col justify-between w-full min-h-screen p-4 sm:p-6 lg:p-8 transition-opacity duration-300">
+    
+    <!-- Top Bar with Return to Hub Link & Session Stats -->
+    <header class="w-full max-w-7xl mx-auto flex items-center justify-between pb-4 border-b border-slate-200/80">
+      <div class="flex items-center space-x-3">
+        <a href="index.html" class="flex items-center space-x-2 text-xs font-semibold text-slate-500 hover:text-indigo-600 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-xs hover:border-indigo-300 transition-colors">
+          <span>← Hub</span>
+        </a>
+        <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+        <span class="text-xs font-semibold text-slate-600 tracking-wide uppercase">Advisory Room Code:</span>
+        <span id="displayRoomCode" class="font-mono font-bold text-sm bg-white border border-slate-200 px-2.5 py-0.5 rounded-lg text-indigo-600 shadow-xs">Loading...</span>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <div class="bg-white border border-slate-200 px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-600 shadow-xs flex items-center space-x-2">
+          <span>Responses:</span>
+          <span id="responseCounter" class="font-bold text-indigo-600 text-sm">0</span>
+        </div>
+        <button id="resetSessionBtn" class="text-xs font-medium text-rose-600 hover:text-rose-700 bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-200 px-3.5 py-1.5 rounded-xl transition-colors shadow-xs">
+          Clear Board
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Visual Matrix & Side Card Layout -->
+    <main class="flex-1 flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-14 my-4 max-w-7xl mx-auto w-full">
+      
+      <!-- The 2x2 Matrix Grid (Exact match to reference image) -->
+      <div class="flex items-center justify-center">
+        <!-- Vertical Y-Axis Label: Energy -->
+        <div class="flex items-center justify-center pr-3 sm:pr-5 select-none">
+          <span class="text-slate-700 font-semibold text-lg sm:text-2xl tracking-tight -rotate-90 origin-center whitespace-nowrap">
+            Energy &rarr;
+          </span>
+        </div>
+
+        <div class="flex flex-col items-center">
+          <!-- 2x2 Off-White Panels with Floating Coordinates Canvas -->
+          <div class="relative w-[340px] h-[340px] sm:w-[460px] sm:h-[460px] md:w-[520px] md:h-[520px] lg:w-[560px] lg:h-[560px] p-2 bg-transparent select-none">
+            
+            <!-- Quadrant Background Panels -->
+            <div class="grid grid-cols-2 grid-rows-2 gap-3 w-full h-full pointer-events-none">
+              <!-- Top-Left: High Energy, Low Excitement -->
+              <div class="bg-[#ebecee] rounded-3xl relative flex flex-col justify-start p-4">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">High Energy • Low Excitement</span>
+              </div>
+              <!-- Top-Right: High Energy, High Excitement -->
+              <div class="bg-[#ebecee] rounded-3xl relative flex flex-col justify-start p-4 items-end">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">High Energy • High Excitement</span>
+              </div>
+              <!-- Bottom-Left: Low Energy, Low Excitement -->
+              <div class="bg-[#ebecee] rounded-3xl relative flex flex-col justify-end p-4">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Low Energy • Low Excitement</span>
+              </div>
+              <!-- Bottom-Right: Low Energy, High Excitement -->
+              <div class="bg-[#ebecee] rounded-3xl relative flex flex-col justify-end p-4 items-end">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Low Energy • High Excitement</span>
+              </div>
+            </div>
+
+            <!-- Absolute Dot Plot Layer -->
+            <div id="dotCanvas" class="absolute inset-0 m-2 overflow-hidden pointer-events-none">
+              <!-- Plotted dots appear here dynamically -->
+            </div>
+          </div>
+
+          <!-- Horizontal X-Axis Label: Excitement -->
+          <div class="pt-3 sm:pt-5 select-none">
+            <span class="text-slate-700 font-semibold text-lg sm:text-2xl tracking-tight">
+              Excitement &rarr;
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Mentimeter Badge Question + Live QR Code Join Card -->
+      <div class="flex flex-col items-start justify-center max-w-md w-full space-y-6">
+        
+        <!-- Mentimeter Header -->
+        <div class="flex items-center space-x-4">
+          <div class="w-10 h-10 rounded-full bg-[#485bf7] text-white flex items-center justify-center font-bold text-lg shadow-md shadow-indigo-300">
+            1
+          </div>
+          <h2 class="text-2xl sm:text-3xl font-medium text-slate-800 tracking-tight">
+            How do you feel this week?
+          </h2>
+        </div>
+
+        <!-- Join Box with Dynamic QR Code -->
+        <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm w-full flex items-center gap-5">
+          <div class="flex-shrink-0 bg-white p-2 border border-slate-100 rounded-2xl shadow-xs">
+            <img id="projectorQrCode" src="" alt="Scan QR Code" class="w-28 h-28 object-contain rounded-lg">
+          </div>
+          <div class="space-y-1.5 flex-1">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <p class="text-xs font-bold uppercase tracking-wider text-indigo-600">Scan on iPad</p>
+            </div>
+            <p class="text-xs text-slate-500 leading-snug">
+              Point iPad camera at the code to pick your coordinates and dot color.
+            </p>
+            <div class="pt-1">
+              <span class="text-[11px] text-slate-400 font-mono bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                Auto-joins Room
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Class Average Stats Pill -->
+        <div class="bg-white/70 border border-slate-200 rounded-2xl p-4 w-full flex items-center justify-around text-center shadow-xs">
+          <div>
+            <div class="text-[11px] font-bold uppercase text-slate-400">Avg Excitement</div>
+            <div id="avgExcitement" class="text-lg font-black text-slate-700">- / 10</div>
+          </div>
+          <div class="h-8 w-px bg-slate-200"></div>
+          <div>
+            <div class="text-[11px] font-bold uppercase text-slate-400">Avg Energy</div>
+            <div id="avgEnergy" class="text-lg font-black text-slate-700">- / 10</div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- Bottom Footer -->
+    <footer class="w-full text-center text-xs text-slate-400 py-2">
+      Live WebSocket Sync • GitHub Pages Ready
+    </footer>
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- STUDENT IPAD RESPONSE VIEW                 -->
+  <!-- ========================================== -->
+  <div id="studentView" class="hidden flex-1 flex flex-col justify-between max-w-lg mx-auto w-full p-4 sm:p-6 min-h-screen">
+    
+    <!-- Top Status -->
+    <header class="flex items-center justify-between pb-3 border-b border-slate-200">
+      <div class="flex items-center space-x-2">
+        <span class="text-base font-black text-indigo-600">Class Check-in</span>
+        <span class="text-xs text-slate-400">• Advisory</span>
+      </div>
+      <div id="studentConnStatus" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Connected
+      </div>
+    </header>
+
+    <!-- Form Cards -->
+    <main class="my-auto py-6 space-y-6">
+      
+      <div>
+        <h2 class="text-2xl font-bold text-slate-900 tracking-tight">How do you feel today?</h2>
+        <p class="text-xs text-slate-500 mt-1">Adjust your sliders and pick your dot color to post to the board.</p>
+      </div>
+
+      <!-- Energy Slider (1 - 10) -->
+      <div class="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3">
+        <div class="flex justify-between items-center">
+          <label class="text-sm font-bold text-slate-800 flex items-center gap-2">
+            <span>⚡</span> Energy Level
+          </label>
+          <span id="energyValDisplay" class="text-base font-black text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 py-0.5 rounded-full">5</span>
+        </div>
+        <input type="range" id="energyRange" min="1" max="10" step="0.5" value="5" class="w-full">
+        <div class="flex justify-between text-[11px] font-semibold text-slate-400 px-1">
+          <span>1 (Exhausted)</span>
+          <span>10 (Full Energy)</span>
+        </div>
+      </div>
+
+      <!-- Excitement Slider (1 - 10) -->
+      <div class="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3">
+        <div class="flex justify-between items-center">
+          <label class="text-sm font-bold text-slate-800 flex items-center gap-2">
+            <span>🎉</span> Excitement Level
+          </label>
+          <span id="excitementValDisplay" class="text-base font-black text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 py-0.5 rounded-full">5</span>
+        </div>
+        <input type="range" id="excitementRange" min="1" max="10" step="0.5" value="5" class="w-full">
+        <div class="flex justify-between text-[11px] font-semibold text-slate-400 px-1">
+          <span>1 (Not Excited)</span>
+          <span>10 (Super Hyped)</span>
+        </div>
+      </div>
+
+      <!-- Dot Color Swatches -->
+      <div class="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3">
+        <label class="text-sm font-bold text-slate-800 block">Choose Your Dot Color</label>
+        <div id="colorSwatches" class="flex items-center justify-between gap-2">
+          <!-- Swatches generated in JS -->
+        </div>
+      </div>
+
+      <!-- Optional Name / Nickname -->
+      <div class="bg-white border border-slate-200 rounded-3xl p-4 shadow-sm">
+        <input type="text" id="studentNameInput" placeholder="Optional: First Name or Nickname" maxlength="15" class="w-full text-sm bg-transparent outline-none text-slate-800 placeholder-slate-400">
+      </div>
+
+      <!-- Submit Button -->
+      <button id="submitVoteBtn" class="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-bold text-base shadow-lg shadow-indigo-300 transition-all flex items-center justify-center space-x-2">
+        <span>Plot on Big Screen</span>
+        <span>→</span>
+      </button>
+
+      <!-- Confirmation Toast -->
+      <div id="submitSuccessCard" class="hidden bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-center space-y-1">
+        <div class="text-sm font-bold">Dot Posted! Look up at the screen! 🎯</div>
+        <p class="text-xs text-emerald-600">You can adjust your sliders anytime to move your dot.</p>
+      </div>
+
+    </main>
+
+    <footer class="text-center text-xs text-slate-400 py-3">
+      Advisory Check-in • Anonymous & Safe
+    </footer>
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT LOGIC                           -->
+  <!-- ========================================== -->
+  <script>
+    // Configuration & State
+    const urlParams = new URLSearchParams(window.location.search);
+    const isStudent = urlParams.get('role') === 'student';
+    let roomCode = urlParams.get('room');
+    let responses = [];
+    let selectedColor = '#4f46e5';
+
+    const COLOR_PALETTE = [
+      '#4f46e5', // Indigo
+      '#06b6d4', // Cyan
+      '#10b981', // Emerald
+      '#f59e0b', // Amber
+      '#ec4899', // Pink
+      '#8b5cf6', // Violet
+      '#ef4444'  // Rose
+    ];
+
+    // MQTT Setup
+    let mqttClient = null;
+    const MQTT_BROKER = 'broker.hivemq.com';
+    const MQTT_PORT = 8884; // Secure WSS
+
+    // Initialize View based on URL Role
+    if (isStudent) {
+      document.getElementById('teacherView').classList.add('hidden');
+      document.getElementById('studentView').classList.remove('hidden');
+      setupStudentView();
+    } else {
+      setupTeacherView();
+    }
+
+    // ==========================================
+    // TEACHER LOGIC
+    // ==========================================
+    function setupTeacherView() {
+      // 1. Generate or load 4-digit room code
+      if (!roomCode) {
+        roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+      }
+      document.getElementById('displayRoomCode').innerText = roomCode;
+
+      // 2. Generate student QR Code
+      const currentUrl = window.location.href.split('?')[0];
+      const studentJoinUrl = `${currentUrl}?role=student&room=${roomCode}`;
+      
+      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(studentJoinUrl)}&margin=4`;
+      document.getElementById('projectorQrCode').src = qrApiUrl;
+
+      // 3. Connect to MQTT Topic for this room
+      connectMQTT(`class-checkin-${roomCode}`, (msg) => {
+        try {
+          const data = JSON.parse(msg);
+          if (data.type === 'vote') {
+            addOrUpdateResponse(data);
+          } else if (data.type === 'reset') {
+            responses = [];
+            renderDots();
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      });
+
+      // 4. Reset Button
+      document.getElementById('resetSessionBtn').addEventListener('click', () => {
+        responses = [];
+        renderDots();
+        publishMessage({ type: 'reset' });
+      });
+    }
+
+    function addOrUpdateResponse(data) {
+      const idx = responses.findIndex(r => r.id === data.id);
+      if (idx >= 0) {
+        responses[idx] = data;
+      } else {
+        responses.push(data);
+      }
+      renderDots();
+    }
+
+    function renderDots() {
+      const canvas = document.getElementById('dotCanvas');
+      canvas.innerHTML = '';
+
+      if (responses.length === 0) {
+        document.getElementById('responseCounter').innerText = '0';
+        document.getElementById('avgExcitement').innerText = '- / 10';
+        document.getElementById('avgEnergy').innerText = '- / 10';
+        return;
+      }
+
+      document.getElementById('responseCounter').innerText = responses.length;
+
+      let totalEnergy = 0;
+      let totalExcitement = 0;
+
+      responses.forEach((resp) => {
+        totalEnergy += parseFloat(resp.energy);
+        totalExcitement += parseFloat(resp.excitement);
+
+        // Convert (1-10) scale into 5% - 95% coordinates to keep inside borders
+        const leftPercent = 5 + ((resp.excitement - 1) / 9) * 90;
+        const bottomPercent = 5 + ((resp.energy - 1) / 9) * 90;
+
+        const dot = document.createElement('div');
+        dot.className = 'student-dot absolute flex items-center justify-center';
+        dot.style.left = `${leftPercent}%`;
+        dot.style.bottom = `${bottomPercent}%`;
+
+        // Render dot circle with optional name label
+        dot.innerHTML = `
+          <div class="relative group flex items-center justify-center">
+            <span class="w-5 h-5 sm:w-6 sm:h-6 rounded-full shadow-md border-2 border-white" style="background-color: ${resp.color};"></span>
+            ${resp.name ? `
+              <span class="absolute -top-6 whitespace-nowrap bg-slate-900/80 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow pointer-events-none">
+                ${resp.name}
+              </span>
+            ` : ''}
+          </div>
+        `;
+
+        canvas.appendChild(dot);
+      });
+
+      // Calculate Averages
+      const avgEn = (totalEnergy / responses.length).toFixed(1);
+      const avgEx = (totalExcitement / responses.length).toFixed(1);
+
+      document.getElementById('avgEnergy').innerText = `${avgEn} / 10`;
+      document.getElementById('avgExcitement').innerText = `${avgEx} / 10`;
+    }
+
+    // ==========================================
+    // STUDENT IPAD LOGIC
+    // ==========================================
+    function setupStudentView() {
+      const energySlider = document.getElementById('energyRange');
+      const excitementSlider = document.getElementById('excitementRange');
+      const energyDisplay = document.getElementById('energyValDisplay');
+      const excitementDisplay = document.getElementById('excitementValDisplay');
+      const submitBtn = document.getElementById('submitVoteBtn');
+      const nameInput = document.getElementById('studentNameInput');
+      const successToast = document.getElementById('submitSuccessCard');
+
+      // Unique device ID for student so repeated adjustments update their same dot
+      let studentId = localStorage.getItem('checkin_student_id');
+      if (!studentId) {
+        studentId = 'std_' + Math.random().toString(36).substring(2, 9);
+        localStorage.setItem('checkin_student_id', studentId);
+      }
+
+      // Slider feedback
+      energySlider.addEventListener('input', (e) => energyDisplay.innerText = e.target.value);
+      excitementSlider.addEventListener('input', (e) => excitementDisplay.innerText = e.target.value);
+
+      // Render color swatches
+      const swatchesContainer = document.getElementById('colorSwatches');
+      COLOR_PALETTE.forEach((color, i) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `w-10 h-10 rounded-full transition-transform border-2 ${i === 0 ? 'scale-110 border-slate-800' : 'border-transparent'}`;
+        btn.style.backgroundColor = color;
+        btn.addEventListener('click', () => {
+          selectedColor = color;
+          Array.from(swatchesContainer.children).forEach(c => {
+            c.classList.remove('scale-110', 'border-slate-800');
+            c.classList.add('border-transparent');
+          });
+          btn.classList.add('scale-110', 'border-slate-800');
+          btn.classList.remove('border-transparent');
+        });
+        swatchesContainer.appendChild(btn);
+      });
+
+      // Connect to MQTT
+      connectMQTT(`class-checkin-${roomCode}`);
+
+      // Submit vote
+      submitBtn.addEventListener('click', () => {
+        const payload = {
+          type: 'vote',
+          id: studentId,
+          energy: parseFloat(energySlider.value),
+          excitement: parseFloat(excitementSlider.value),
+          color: selectedColor,
+          name: nameInput.value.trim()
+        };
+
+        publishMessage(payload);
+        successToast.classList.remove('hidden');
+        submitBtn.innerText = 'Update My Dot on Board';
+      });
+    }
+
+    // ==========================================
+    // SHARED SECURE MQTT WEBSOCKET CONNECTION
+    // ==========================================
+    function connectMQTT(topic, onMessageCallback) {
+      const clientId = 'client_' + Math.random().toString(16).substr(2, 8);
+      mqttClient = new Paho.MQTT.Client(MQTT_BROKER, MQTT_PORT, clientId);
+
+      mqttClient.onConnectionLost = (responseObject) => {
+        if (responseObject.errorCode !== 0) {
+          console.warn("MQTT Lost, reconnecting...", responseObject.errorMessage);
+          setTimeout(() => connectMQTT(topic, onMessageCallback), 2000);
+        }
+      };
+
+      if (onMessageCallback) {
+        mqttClient.onMessageArrived = (message) => {
+          onMessageCallback(message.payloadString);
+        };
+      }
+
+      mqttClient.connect({
+        useSSL: true,
+        timeout: 5,
+        onSuccess: () => {
+          console.log("MQTT Connected to Topic:", topic);
+          mqttClient.subscribe(topic);
+        },
+        onFailure: (err) => {
+          console.error("MQTT Failed:", err);
+          setTimeout(() => connectMQTT(topic, onMessageCallback), 3000);
+        }
+      });
+    }
+
+    function publishMessage(obj) {
+      if (!mqttClient || !mqttClient.isConnected()) return;
+      const message = new Paho.MQTT.Message(JSON.stringify(obj));
+      message.destinationName = `class-checkin-${roomCode}`;
+      mqttClient.send(message);
+    }
+  </script>
+</body>
+</html>
