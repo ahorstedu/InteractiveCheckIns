@@ -26,7 +26,7 @@
 </head>
 <body class="bg-[#f8fafc] text-slate-800 min-h-screen flex flex-col justify-between selection:bg-indigo-100 selection:text-indigo-900">
 
-  <!-- Header -->
+<!*--------------------------------------------- Header -----------------------------------------------*!>
   <header class="w-full bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 py-3.5 flex items-center justify-between">
       <div class="flex items-center space-x-3">
@@ -47,10 +47,10 @@
     </div>
   </header>
 
-  <!-- Main Grid Content -->
+<!*--------------------------------------------- Main Grid Content -----------------------------------------------*!>  
   <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-8 space-y-8">
-    
-    <!-- Hero / Quick Instructions Banner -->
+
+<!*--------------------------------------------- Hero / Quick Instructions Banner -----------------------------------------------*!>      
     <div class="bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
       <div class="space-y-2 max-w-2xl relative z-10">
         <span class="inline-block px-3 py-1 rounded-full bg-white/10 text-indigo-200 text-xs font-bold tracking-wider uppercase backdrop-blur-sm">Advisory Toolkit</span>
@@ -60,7 +60,7 @@
         </p>
       </div>
 
-      <!-- Quick Add New Idea Tip -->
+<!*--------------------------------------------- Quick Add New Idea Tip -----------------------------------------------*!>        
       <div class="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 max-w-xs text-xs text-indigo-100 space-y-1.5 flex-shrink-0">
         <div class="font-bold text-white flex items-center gap-1.5">
           <span>💡</span> Expand Anytime
@@ -71,7 +71,7 @@
       </div>
     </div>
 
-    <!-- Category Filters & Activity Grid -->
+<!*--------------------------------------------- Category Filters & Activity Grid -----------------------------------------------*!>        
     <div class="space-y-4">
       <div class="flex items-center justify-between">
         <h3 class="text-sm font-bold text-slate-500 uppercase tracking-wider">Select Today's Activity</h3>
@@ -80,8 +80,8 @@
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
-        <!-- 1. The 2x2 Energy & Excitement Matrix -->
-        <a href="matrix.html" class="card-hover group bg-white border border-slate-200 hover:border-indigo-400 rounded-3xl p-6 shadow-sm hover:shadow-xl flex flex-col justify-between relative overflow-hidden">
+<!*--------------------------------------------- 1. The 2x2 Energy & Excitement Matrix -----------------------------------------------*!>        
+                <a href="matrix.html" class="card-hover group bg-white border border-slate-200 hover:border-indigo-400 rounded-3xl p-6 shadow-sm hover:shadow-xl flex flex-col justify-between relative overflow-hidden">
           <div class="space-y-4">
             <div class="flex items-center justify-between">
               <span class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xl border border-indigo-100 group-hover:scale-110 transition-transform">
@@ -99,8 +99,8 @@
                 Students choose their energy (1-10) and excitement (1-10) with custom dot colors, plotting live on the 4 quadrants.
               </p>
             </div>
-
-            <!-- Visual Preview Mini Matrix -->
+            
+<!*--------------------------------------------- Mini Matrix Preview -----------------------------------------------*!>        
             <div class="w-full h-24 bg-slate-50 border border-slate-100 rounded-2xl p-2 grid grid-cols-2 grid-rows-2 gap-1.5">
               <div class="bg-slate-200/70 rounded-lg"></div>
               <div class="bg-slate-200/70 rounded-lg relative flex items-center justify-center">
@@ -120,7 +120,7 @@
           </div>
         </a>
 
-        <!-- 2. The Battery Level Check-in -->
+<!*--------------------------------------------- 2. The Battery Level Check-in -----------------------------------------------*!>                
         <a href="battery.html" class="card-hover group bg-white border border-slate-200 hover:border-emerald-400 rounded-3xl p-6 shadow-sm hover:shadow-xl flex flex-col justify-between relative overflow-hidden">
           <div class="space-y-4">
             <div class="flex items-center justify-between">
@@ -140,7 +140,7 @@
               </p>
             </div>
 
-            <!-- Mini Battery Preview -->
+<!*--------------------------------------------- Mini Battery Preview -----------------------------------------------*!>        
             <div class="w-full h-24 bg-slate-50 border border-slate-100 rounded-2xl p-4 flex items-center justify-center">
               <div class="w-40 h-10 border-2 border-slate-700 rounded-xl p-1 flex items-center relative bg-white">
                 <div class="h-full bg-emerald-500 rounded-lg w-3/4"></div>
@@ -156,7 +156,7 @@
           </div>
         </a>
 
-        <!-- 3. Word Cloud -->
+<!*--------------------------------------------- 3. Word Cloud -----------------------------------------------*!>                
         <a href="wordcloud.html" class="card-hover group bg-white border border-slate-200 hover:border-purple-400 rounded-3xl p-6 shadow-sm hover:shadow-xl flex flex-col justify-between relative overflow-hidden">
           <div class="space-y-4">
             <div class="flex items-center justify-between">
@@ -176,7 +176,7 @@
               </p>
             </div>
 
-            <!-- Mini Word Cloud Preview -->
+<!*--------------------------------------------- Mini Word Cloud Preview -----------------------------------------------*!>        
             <div class="w-full h-24 bg-slate-50 border border-slate-100 rounded-2xl p-2 flex flex-wrap gap-1.5 items-center justify-center">
               <span class="text-[10px] font-bold px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full">Tired (4)</span>
               <span class="text-xs font-black px-2.5 py-1 bg-purple-600 text-white rounded-full">Ready (8)</span>
@@ -189,8 +189,8 @@
             <span class="group-hover:translate-x-1 transition-transform">→</span>
           </div>
         </a>
-
-        <!-- 4. Emoji Grid -->
+        
+<!*--------------------------------------------- 4. Emoji Grid -----------------------------------------------*!>                
         <a href="emoji.html" class="card-hover group bg-white border border-slate-200 hover:border-amber-400 rounded-3xl p-6 shadow-sm hover:shadow-xl flex flex-col justify-between relative overflow-hidden">
           <div class="space-y-4">
             <div class="flex items-center justify-between">
@@ -209,8 +209,8 @@
                 A student-favorite advisory classic. 6 funny expressive emoji mood cards with live tally vote counts.
               </p>
             </div>
-
-            <!-- Mini Emoji Grid Preview -->
+            
+<!*--------------------------------------------- Mini Emoji Grid Preview -----------------------------------------------*!>        
             <div class="w-full h-24 bg-slate-50 border border-slate-100 rounded-2xl p-2 grid grid-cols-3 gap-1.5 items-center text-center">
               <span class="text-xl">😴</span>
               <span class="text-xl">☕</span>
@@ -227,7 +227,7 @@
           </div>
         </a>
 
-        <!-- 5. Weather Forecast Inside -->
+<!*--------------------------------------------- 5. Weather Forecast Inside -----------------------------------------------*!>                
         <a href="weather.html" class="card-hover group bg-white border border-slate-200 hover:border-sky-400 rounded-3xl p-6 shadow-sm hover:shadow-xl flex flex-col justify-between relative overflow-hidden">
           <div class="space-y-4">
             <div class="flex items-center justify-between">
@@ -246,8 +246,8 @@
                 Students report the mental forecast for their day: Sunny, Partly Cloudy, Rainy, or Stormy.
               </p>
             </div>
-
-            <!-- Mini Weather Forecast Preview -->
+            
+<!*--------------------------------------------- Mini Weather Forcast Preview -----------------------------------------------*!>        
             <div class="w-full h-24 bg-slate-50 border border-slate-100 rounded-2xl p-2 grid grid-cols-4 gap-1 items-center text-center">
               <span class="text-2xl">☀️</span>
               <span class="text-2xl">⛅</span>
@@ -261,8 +261,43 @@
             <span class="group-hover:translate-x-1 transition-transform">→</span>
           </div>
         </a>
+        
+<!*--------------------------------------------- 6. Magnetic Fridge Poetry -----------------------------------------------*!>        
+        <a href="poetry.html" class="card-hover group bg-white border border-slate-200 hover:border-indigo-400 rounded-3xl p-6 shadow-sm hover:shadow-xl flex flex-col justify-between relative overflow-hidden">
+          <div class="space-y-4">
+            <div class="flex items-center justify-between">
+              <span class="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center font-black text-xl border border-rose-100 group-hover:scale-110 transition-transform">
+                🧲
+              </span>
+              <span class="text-[11px] font-bold uppercase tracking-wider text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full">
+                Collaborative Poem
+              </span>
+            </div>
+            <div>
+              <h4 class="text-lg font-bold text-slate-900 group-hover:text-rose-600 transition-colors">
+                Magnetic Fridge Poetry
+              </h4>
+              <p class="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed">
+                Students join a shared whiteboard to slide word magnets, add new terms, and build a collective advisory poem.
+              </p>
+            </div>
+          
+<!*--------------------------------------------- Mini Magnet Preview -----------------------------------------------*!>        
+            <div class="w-full h-24 bg-slate-100 border border-slate-200 rounded-2xl p-2.5 flex flex-wrap gap-1.5 items-center justify-center relative overflow-hidden">
+              <span class="px-2 py-0.5 bg-white border border-slate-300 border-b-2 text-slate-800 text-[10px] font-bold rounded shadow-xs -rotate-2">the</span>
+              <span class="px-2 py-0.5 bg-pink-50 border border-pink-200 border-b-2 text-pink-700 text-[10px] font-bold rounded shadow-xs rotate-1">morning</span>
+              <span class="px-2 py-0.5 bg-white border border-slate-300 border-b-2 text-slate-800 text-[10px] font-bold rounded shadow-xs rotate-3">is</span>
+              <span class="px-2 py-0.5 bg-emerald-50 border border-emerald-200 border-b-2 text-emerald-700 text-[10px] font-bold rounded shadow-xs -rotate-1">bright ✨</span>
+            </div>
+          </div>
 
-        <!-- 6. Placeholder / "Create Your Own" Card -->
+          <div class="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-rose-600 group-hover:text-rose-700">
+            <span>Launch Presentation</span>
+            <span class="group-hover:translate-x-1 transition-transform">→</span>
+          </div>
+        </a>
+        
+<!*--------------------------------------------- Placeholder / "Create Your Own" Card -----------------------------------------------*!>        
         <div class="border-2 border-dashed border-slate-300 rounded-3xl p-6 flex flex-col items-center justify-center text-center space-y-3 bg-white/40">
           <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center font-black text-xl">
             ➕
@@ -280,7 +315,7 @@
 
   </main>
 
-  <!-- Footer -->
+<!*--------------------------------------------- Footer -----------------------------------------------*!>        
   <footer class="w-full bg-white border-t border-slate-200 py-4 px-6 text-center text-xs text-slate-400">
     <span>Hosted with GitHub Pages • Open Source Advisory Hub</span>
   </footer>
