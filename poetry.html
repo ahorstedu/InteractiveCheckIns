@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Magnetic Fridge Poetry Check-in</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@1,600&display=swap" rel="stylesheet">
+  <!-- Paho MQTT WebSocket Client -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Brushed Enamel Fridge Canvas Texture */
+    .fridge-surface {
+      background-color: #f1f3f5;
+      background-image: 
+        radial-gradient(#d5d9df 1px, transparent 1px),
+        radial-gradient(#d5d9df 1px, #f1f3f5 1px);
+      background-size: 24px 24px;
+      background-position: 0 0, 12px 12px;
+    }
+
+    /* Realistic 3D Tactile Magnet Tiles */
+    .magnet-tile {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.35rem 0.75rem;
+      font-family: 'Inter', monospace, sans-serif;
+      font-weight: 700;
+      font-size: 0.95rem;
+      letter-spacing: -0.01em;
+      color: #1e293b;
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      border-bottom: 3.5px solid #94a3b8;
+      border-right: 2.5px solid #94a3b8;
+      border-radius: 6px;
+      box-shadow: 2px 3px 6px -1px rgba(15, 23, 42, 0.16);
+      cursor: grab;
+      touch-action: none;
+      position: absolute;
+      will-change: transform, left, top;
+      transition: box-shadow 0.15s ease, transform 0.1s ease;
+      white-space: nowrap;
+    }
+
+    .magnet-tile:active, .magnet-tile.dragging {
+      cursor: grabbing;
+      transform: scale(1.08) rotate(-1.5deg);
+      box-shadow: 5px 8px 16px -2px rgba(15, 23, 42, 0.28);
+      z-index: 1000 !important;
+      border-bottom: 2px solid #64748b;
+    }
+
+    /* Colored theme magnet styles */
+    .magnet-tile.tag-verb {
+      background: #fdf2f8;
+      border-color: #fbcfe8;
+      border-bottom-color: #f472b6;
+      color: #9d174d;
+    }
+    .magnet-tile.tag-adj {
+      background: #f0fdf4;
+      border-color: #bbf7d0;
+      border-bottom-color: #4ade80;
+      color: #166534;
+    }
+    .magnet-tile.tag-mood {
+      background: #eff6ff;
+      border-color: #bfdbfe;
+      border-bottom-color: #60a5fa;
+      color: #1e40af;
+    }
+    .magnet-tile.tag-emoji {
+      font-size: 1.25rem;
+      padding: 0.2rem 0.5rem;
+      background: #fffbeb;
+      border-color: #fde68a;
+      border-bottom-color: #fbbf24;
+    }
+
+    /* Hand-written Advisory Heading */
+    .handwriting {
+      font-family: 'Caveat', cursive;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-800 min-h-screen flex flex-col justify-between selection:bg-rose-100 selection:text-rose-900">
+
+  <!-- ========================================== -->
+  <!-- TEACHER / PROJECTOR BIG SCREEN VIEW        -->
+  <!-- ========================================== -->
+  <div id="teacherView" class="flex-1 flex flex-col justify-between w-full min-h-screen p-4 sm:p-6 lg:p-7 bg-[#1e2430]">
+    
+    <!-- Top Bar Navigation & Stats -->
+    <header class="w-full max-w-7xl mx-auto flex items-center justify-between pb-3 border-b border-slate-700/80">
+      <div class="flex items-center space-x-3">
+        <a href="index.html" class="flex items-center space-x-2 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700 shadow-xs hover:border-slate-500 transition-colors">
+          <span>← Hub</span>
+        </a>
+        <div class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
+        <span class="text-xs font-semibold text-slate-300 tracking-wide uppercase">Class Poem Room:</span>
+        <span id="displayRoomCode" class="font-mono font-bold text-sm bg-slate-800 border border-slate-700 px-2.5 py-0.5 rounded-lg text-emerald-400 shadow-xs">Loading...</span>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <div class="bg-slate-800 border border-slate-700 px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-300 shadow-xs flex items-center space-x-2">
+          <span>Magnets on Board:</span>
+          <span id="magnetCounter" class="font-bold text-emerald-400 text-sm">0</span>
+        </div>
+        <button id="scatterMagnetsBtn" class="text-xs font-medium text-amber-400 hover:text-amber-300 bg-slate-800 hover:bg-slate-750 border border-slate-700 px-3 py-1.5 rounded-xl transition-colors shadow-xs">
+          🎲 Shake Fridge
+        </button>
+        <button id="resetSessionBtn" class="text-xs font-medium text-rose-400 hover:text-rose-300 bg-slate-800 hover:bg-slate-750 border border-slate-700 px-3 py-1.5 rounded-xl transition-colors shadow-xs">
+          Clear Board
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area: Large Magnetic Whiteboard Canvas + Side QR Card -->
+    <main class="flex-1 flex flex-col lg:flex-row items-stretch justify-center gap-6 my-3 max-w-7xl mx-auto w-full">
+      
+      <!-- Left: Giant Magnetic Fridge Surface Canvas -->
+      <div class="flex-1 w-full bg-white rounded-3xl p-2 sm:p-3 shadow-2xl border-4 border-slate-700 flex flex-col relative overflow-hidden min-h-[520px]">
+        
+        <!-- Fridge Top Decal Banner -->
+        <div class="flex items-center justify-between px-4 py-2 bg-slate-100 rounded-2xl border border-slate-200/80 mb-2">
+          <div class="flex items-center space-x-2">
+            <span class="text-xl">🧲</span>
+            <span class="text-sm font-bold text-slate-700 tracking-tight">The Advisory Fridge</span>
+            <span class="text-[11px] text-slate-400 font-medium hidden sm:inline">• Drag words to compose our collective poem</span>
+          </div>
+          <span class="text-xs text-slate-500 font-mono italic">Live Realtime Sync</span>
+        </div>
+
+        <!-- Interactive Whiteboard Drop Area -->
+        <div id="teacherFridgeBoard" class="fridge-surface flex-1 w-full rounded-2xl border-2 border-slate-300/80 relative overflow-hidden shadow-inner cursor-default">
+          <!-- Dynamically plotted magnet word tiles -->
+        </div>
+
+      </div>
+
+      <!-- Right Column: Mentimeter Header + Live iPad QR Join Card -->
+      <div class="flex flex-col items-start justify-between max-w-sm w-full space-y-5 flex-shrink-0">
+        
+        <!-- Header Badge -->
+        <div class="flex items-center space-x-3.5">
+          <div class="w-10 h-10 rounded-full bg-indigo-500 text-white flex items-center justify-center font-bold text-lg shadow-md shadow-indigo-500/20">
+            6
+          </div>
+          <div>
+            <h2 class="text-2xl font-bold text-white tracking-tight leading-snug">
+              Class Fridge Poetry
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Move words & craft lines together</p>
+          </div>
+        </div>
+
+        <!-- Join Box with Dynamic QR Code -->
+        <div class="bg-slate-800/90 border border-slate-700 rounded-3xl p-5 shadow-lg w-full flex items-center gap-4">
+          <div class="flex-shrink-0 bg-white p-2 rounded-2xl shadow-xs">
+            <img id="projectorQrCode" src="" alt="Scan QR Code" class="w-24 h-24 sm:w-28 sm:h-28 object-contain rounded-lg">
+          </div>
+          <div class="space-y-1.5 flex-1">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <p class="text-xs font-bold uppercase tracking-wider text-emerald-400">Scan on iPad</p>
+            </div>
+            <p class="text-xs text-slate-300 leading-snug">
+              Join the whiteboard to slide magnets or slap down new words.
+            </p>
+            <div class="pt-1">
+              <span class="text-[11px] text-slate-400 font-mono bg-slate-900/60 px-2 py-0.5 rounded-md border border-slate-700">
+                Live Shared Canvas
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Advisory Inspiration Prompt -->
+        <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 w-full shadow-xs">
+          <div class="text-[11px] font-bold uppercase tracking-wider text-amber-400 mb-1">Today's Poetry Spark</div>
+          <p class="text-xs text-slate-200 leading-relaxed italic">
+            "What does this morning feel like? Line up 3 words to capture your vibe or craft a funny headline."
+          </p>
+        </div>
+
+        <!-- Recent Author Stream -->
+        <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 w-full shadow-xs">
+          <div class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+            <span>Recent Words Placed</span>
+            <span id="streamCounter" class="text-indigo-400">0 placed</span>
+          </div>
+          <div id="recentWordsList" class="flex flex-wrap gap-1.5 min-h-[38px] items-center text-xs text-slate-400">
+            <span class="italic text-[11px] text-slate-500">Magnets will light up here as students move them...</span>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full text-center text-xs text-slate-500 py-1">
+      Collaborative Magnetic Poetry • Real-time WebSocket Sync
+    </footer>
+
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- STUDENT IPAD RESPONSE & DRAG VIEW          -->
+  <!-- ========================================== -->
+  <div id="studentView" class="hidden flex-1 flex flex-col justify-between max-w-2xl mx-auto w-full p-3 sm:p-5 min-h-screen bg-slate-900 text-slate-100">
+    
+    <!-- Top Bar -->
+    <header class="flex items-center justify-between pb-3 border-b border-slate-800">
+      <div class="flex items-center space-x-2">
+        <span class="text-base font-black text-indigo-400">🧲 Fridge Poetry</span>
+        <span class="text-xs text-slate-500">• Advisory Board</span>
+      </div>
+      <div id="studentConnStatus" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Connected
+      </div>
+    </header>
+
+    <!-- Student Touch Canvas Area -->
+    <main class="flex-1 flex flex-col my-3 space-y-3">
+      
+      <!-- Interactive Miniature Touch Fridge Canvas -->
+      <div class="space-y-1">
+        <div class="flex justify-between items-center px-1 text-xs text-slate-400 font-medium">
+          <span>Tap & drag any magnet tile:</span>
+          <span class="text-indigo-400 font-semibold">Updates big screen live!</span>
+        </div>
+
+        <div id="studentFridgeBoard" class="fridge-surface w-full h-[320px] sm:h-[380px] rounded-2xl border-2 border-slate-700 relative overflow-hidden shadow-inner">
+          <!-- Magnets appear here and can be dragged directly -->
+        </div>
+      </div>
+
+      <!-- Word Creator Tool: Add Custom Word to Fridge -->
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-3.5 space-y-3 shadow-md">
+        <div class="flex gap-2">
+          <input type="text" id="customWordInput" placeholder="Type a word or emoji..." maxlength="20" class="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white font-semibold text-sm focus:outline-none focus:border-indigo-500">
+          <button id="addCustomWordBtn" type="button" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-1.5 shadow-md">
+            <span>+ Slap on Fridge</span>
+          </button>
+        </div>
+
+        <!-- Fast Tap Word Banks -->
+        <div class="space-y-1.5">
+          <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Quick Word Bank (Tap to Add):</div>
+          <div class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">coffee</button>
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">energy</button>
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">vibes</button>
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">sleep</button>
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">hope</button>
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">today</button>
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">is</button>
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">so</button>
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">magical</button>
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">tired</button>
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">we</button>
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">will</button>
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">conquer</button>
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">chaos</button>
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">✨</button>
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">☕</button>
+            <button type="button" class="quick-add-chip px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-all">🔥</button>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center text-xs text-slate-500 py-1">
+      Safe & Respectful Advisory Whiteboard
+    </footer>
+
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT LOGIC                           -->
+  <!-- ========================================== -->
+  <script>
+    // Starter kit magnet words to seed the fridge
+    const INITIAL_MAGNETS = [
+      { id: 'm1', text: 'the', x: 8, y: 12 },
+      { id: 'm2', text: 'morning', x: 22, y: 12 },
+      { id: 'm3', text: 'is', x: 48, y: 12 },
+      { id: 'm4', text: 'full', x: 58, y: 12 },
+      { id: 'm5', text: 'of', x: 72, y: 12 },
+      { id: 'm6', text: 'possibility', x: 10, y: 24 },
+      { id: 'm7', text: 'we', x: 42, y: 24 },
+      { id: 'm8', text: 'need', x: 54, y: 24 },
+      { id: 'm9', text: 'more', x: 70, y: 24 },
+      { id: 'm10', text: 'coffee', x: 12, y: 38 },
+      { id: 'm11', text: 'and', x: 36, y: 38 },
+      { id: 'm12', text: 'quiet', x: 50, y: 38 },
+      { id: 'm13', text: 'vibes', x: 68, y: 38 },
+      { id: 'm14', text: 'today', x: 14, y: 52 },
+      { id: 'm15', text: 'glow', x: 34, y: 52 },
+      { id: 'm16', text: 'bright', x: 52, y: 52 },
+      { id: 'm17', text: '☕', x: 74, y: 52 },
+      { id: 'm18', text: '✨', x: 84, y: 52 }
+    ];
+
+    // State
+    const urlParams = new URLSearchParams(window.location.search);
+    const isStudent = urlParams.get('role') === 'student';
+    let roomCode = urlParams.get('room');
+    
+    // Map of id -> { id, text, x: percentage (0-100), y: percentage (0-100) }
+    let magnets = {};
+    let recentActions = [];
+
+    // MQTT Setup
+    let mqttClient = null;
+    const MQTT_BROKER = 'broker.hivemq.com';
+    const MQTT_PORT = 8884; // Secure WSS
+
+    // Role Router
+    if (isStudent) {
+      document.getElementById('teacherView').classList.add('hidden');
+      document.getElementById('studentView').classList.remove('hidden');
+      setupStudentView();
+    } else {
+      setupTeacherView();
+    }
+
+    // ==========================================
+    // TEACHER LOGIC
+    // ==========================================
+    function setupTeacherView() {
+      if (!roomCode) {
+        roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+      }
+      document.getElementById('displayRoomCode').innerText = roomCode;
+
+      // Seed starter magnets
+      INITIAL_MAGNETS.forEach(m => {
+        magnets[m.id] = { ...m };
+      });
+
+      // Generate QR pointing to student view
+      const currentUrl = window.location.href.split('?')[0];
+      const studentJoinUrl = `${currentUrl}?role=student&room=${roomCode}`;
+      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(studentJoinUrl)}&margin=4`;
+      document.getElementById('projectorQrCode').src = qrApiUrl;
+
+      const board = document.getElementById('teacherFridgeBoard');
+      renderTeacherMagnets();
+
+      // Connect MQTT
+      connectMQTT(`class-poetry-${roomCode}`, (msg) => {
+        try {
+          const data = JSON.parse(msg);
+          if (data.type === 'move') {
+            if (magnets[data.id]) {
+              magnets[data.id].x = data.x;
+              magnets[data.id].y = data.y;
+              updateSingleMagnetDOM('teacherFridgeBoard', data.id, data.x, data.y);
+            }
+          } else if (data.type === 'add') {
+            magnets[data.magnet.id] = data.magnet;
+            renderSingleMagnet('teacherFridgeBoard', data.magnet, false);
+            updateStats(data.magnet.text);
+          } else if (data.type === 'scatter') {
+            magnets = data.magnets;
+            renderTeacherMagnets();
+          } else if (data.type === 'reset') {
+            magnets = {};
+            INITIAL_MAGNETS.forEach(m => magnets[m.id] = { ...m });
+            renderTeacherMagnets();
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      });
+
+      // Scatter / Shake Board Button
+      document.getElementById('scatterMagnetsBtn').addEventListener('click', () => {
+        Object.keys(magnets).forEach(id => {
+          magnets[id].x = Math.floor(5 + Math.random() * 85);
+          magnets[id].y = Math.floor(5 + Math.random() * 85);
+        });
+        renderTeacherMagnets();
+        publishMessage({ type: 'scatter', magnets });
+      });
+
+      // Reset Button
+      document.getElementById('resetSessionBtn').addEventListener('click', () => {
+        magnets = {};
+        INITIAL_MAGNETS.forEach(m => magnets[m.id] = { ...m });
+        renderTeacherMagnets();
+        publishMessage({ type: 'reset' });
+      });
+    }
+
+    function renderTeacherMagnets() {
+      const board = document.getElementById('teacherFridgeBoard');
+      board.innerHTML = '';
+      Object.values(magnets).forEach(m => {
+        renderSingleMagnet('teacherFridgeBoard', m, false);
+      });
+      updateStats();
+    }
+
+    function updateStats(lastWord = null) {
+      const count = Object.keys(magnets).length;
+      document.getElementById('magnetCounter').innerText = count;
+      document.getElementById('streamCounter').innerText = `${count} placed`;
+
+      if (lastWord) {
+        recentActions.unshift(lastWord);
+        if (recentActions.length > 8) recentActions.pop();
+
+        const listEl = document.getElementById('recentWordsList');
+        listEl.innerHTML = '';
+        recentActions.forEach(word => {
+          const pill = document.createElement('span');
+          pill.className = 'px-2 py-0.5 rounded-md bg-slate-700 text-slate-200 text-xs font-bold border border-slate-600 shadow-xs';
+          pill.innerText = word;
+          listEl.appendChild(pill);
+        });
+      }
+    }
+
+    function renderSingleMagnet(containerId, magnet, isDraggable) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      let el = document.getElementById(`${containerId}-${magnet.id}`);
+      if (!el) {
+        el = document.createElement('div');
+        el.id = `${containerId}-${magnet.id}`;
+        el.className = 'magnet-tile';
+        
+        // Add color tags for variety
+        if (/^(is|are|was|need|glow|will|conquer)$/i.test(magnet.text)) el.classList.add('tag-verb');
+        else if (/^(bright|quiet|full|magical|tired)$/i.test(magnet.text)) el.classList.add('tag-adj');
+        else if (/^(coffee|energy|vibes|possibility|hope)$/i.test(magnet.text)) el.classList.add('tag-mood');
+        else if (/^[\p{Emoji}\u200d]+$/u.test(magnet.text)) el.classList.add('tag-emoji');
+
+        el.innerText = magnet.text;
+        container.appendChild(el);
+
+        if (isDraggable) {
+          enableDragging(el, magnet.id, container);
+        }
+      }
+
+      el.style.left = `${magnet.x}%`;
+      el.style.top = `${magnet.y}%`;
+    }
+
+    function updateSingleMagnetDOM(containerId, magnetId, x, y) {
+      const el = document.getElementById(`${containerId}-${magnetId}`);
+      if (el) {
+        el.style.left = `${x}%`;
+        el.style.top = `${y}%`;
+      }
+    }
+
+    // ==========================================
+    // STUDENT DRAGGING LOGIC
+    // ==========================================
+    function setupStudentView() {
+      // Connect to MQTT
+      connectMQTT(`class-poetry-${roomCode}`, (msg) => {
+        try {
+          const data = JSON.parse(msg);
+          if (data.type === 'move') {
+            if (magnets[data.id]) {
+              magnets[data.id].x = data.x;
+              magnets[data.id].y = data.y;
+              updateSingleMagnetDOM('studentFridgeBoard', data.id, data.x, data.y);
+            }
+          } else if (data.type === 'add') {
+            magnets[data.magnet.id] = data.magnet;
+            renderSingleMagnet('studentFridgeBoard', data.magnet, true);
+          } else if (data.type === 'scatter') {
+            magnets = data.magnets;
+            renderStudentMagnets();
+          } else if (data.type === 'reset') {
+            magnets = {};
+            INITIAL_MAGNETS.forEach(m => magnets[m.id] = { ...m });
+            renderStudentMagnets();
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      });
+
+      // Load initial magnets
+      INITIAL_MAGNETS.forEach(m => magnets[m.id] = { ...m });
+      renderStudentMagnets();
+
+      // Custom word button
+      const addBtn = document.getElementById('addCustomWordBtn');
+      const input = document.getElementById('customWordInput');
+
+      const submitCustom = () => {
+        const text = input.value.trim();
+        if (!text) return;
+
+        const newMagnet = {
+          id: 'cust_' + Math.random().toString(36).substring(2, 9),
+          text: text,
+          x: Math.floor(15 + Math.random() * 65),
+          y: Math.floor(15 + Math.random() * 65)
+        };
+
+        magnets[newMagnet.id] = newMagnet;
+        renderSingleMagnet('studentFridgeBoard', newMagnet, true);
+        publishMessage({ type: 'add', magnet: newMagnet });
+        input.value = '';
+      };
+
+      addBtn.addEventListener('click', submitCustom);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') submitCustom();
+      });
+
+      // Word bank chips
+      document.querySelectorAll('.quick-add-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          const text = chip.innerText.trim();
+          const newMagnet = {
+            id: 'chip_' + Math.random().toString(36).substring(2, 9),
+            text: text,
+            x: Math.floor(10 + Math.random() * 70),
+            y: Math.floor(10 + Math.random() * 70)
+          };
+          magnets[newMagnet.id] = newMagnet;
+          renderSingleMagnet('studentFridgeBoard', newMagnet, true);
+          publishMessage({ type: 'add', magnet: newMagnet });
+        });
+      });
+    }
+
+    function renderStudentMagnets() {
+      const board = document.getElementById('studentFridgeBoard');
+      board.innerHTML = '';
+      Object.values(magnets).forEach(m => {
+        renderSingleMagnet('studentFridgeBoard', m, true);
+      });
+    }
+
+    // Direct touch & pointer drag engine with percentage clamping
+    function enableDragging(tileEl, magnetId, boardEl) {
+      let isDragging = false;
+      let startX, startY;
+      let initialLeft, initialTop;
+      let boardRect;
+      let throttleTimer = null;
+
+      const onPointerDown = (e) => {
+        isDragging = true;
+        tileEl.classList.add('dragging');
+        boardRect = boardEl.getBoundingClientRect();
+
+        startX = e.clientX || (e.touches && e.touches[0].clientX);
+        startY = e.clientY || (e.touches && e.touches[0].clientY);
+
+        initialLeft = parseFloat(tileEl.style.left) || 0;
+        initialTop = parseFloat(tileEl.style.top) || 0;
+
+        window.addEventListener('pointermove', onPointerMove, { passive: false });
+        window.addEventListener('pointerup', onPointerUp);
+        window.addEventListener('touchmove', onPointerMove, { passive: false });
+        window.addEventListener('touchend', onPointerUp);
+        e.preventDefault();
+      };
+
+      const onPointerMove = (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+
+        const currentX = e.clientX || (e.touches && e.touches[0].clientX);
+        const currentY = e.clientY || (e.touches && e.touches[0].clientY);
+
+        const deltaX = currentX - startX;
+        const deltaY = currentY - startY;
+
+        // Convert delta pixels to percentage of board width & height
+        const deltaXPct = (deltaX / boardRect.width) * 100;
+        const deltaYPct = (deltaY / boardRect.height) * 100;
+
+        let newX = Math.max(1, Math.min(88, initialLeft + deltaXPct));
+        let newY = Math.max(1, Math.min(88, initialTop + deltaYPct));
+
+        tileEl.style.left = `${newX}%`;
+        tileEl.style.top = `${newY}%`;
+
+        // Update local object
+        if (magnets[magnetId]) {
+          magnets[magnetId].x = newX;
+          magnets[magnetId].y = newY;
+        }
+
+        // Throttle broadcast to 40ms to keep stream smooth without choking
+        if (!throttleTimer) {
+          throttleTimer = setTimeout(() => {
+            publishMessage({
+              type: 'move',
+              id: magnetId,
+              x: Math.round(newX * 10) / 10,
+              y: Math.round(newY * 10) / 10
+            });
+            throttleTimer = null;
+          }, 45);
+        }
+      };
+
+      const onPointerUp = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        tileEl.classList.remove('dragging');
+
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        window.removeEventListener('touchmove', onPointerMove);
+        window.removeEventListener('touchend', onPointerUp);
+
+        // Final exact broadcast
+        const finalX = parseFloat(tileEl.style.left) || 0;
+        const finalY = parseFloat(tileEl.style.top) || 0;
+        publishMessage({
+          type: 'move',
+          id: magnetId,
+          x: Math.round(finalX * 10) / 10,
+          y: Math.round(finalY * 10) / 10
+        });
+      };
+
+      tileEl.addEventListener('pointerdown', onPointerDown);
+      tileEl.addEventListener('touchstart', onPointerDown, { passive: false });
+    }
+
+    // ==========================================
+    // SHARED SECURE MQTT WEBSOCKET CONNECTION
+    // ==========================================
+    function connectMQTT(topic, onMessageCallback) {
+      const clientId = 'client_poetry_' + Math.random().toString(16).substr(2, 8);
+      mqttClient = new Paho.MQTT.Client(MQTT_BROKER, MQTT_PORT, clientId);
+
+      mqttClient.onConnectionLost = (responseObject) => {
+        if (responseObject.errorCode !== 0) {
+          setTimeout(() => connectMQTT(topic, onMessageCallback), 2000);
+        }
+      };
+
+      if (onMessageCallback) {
+        mqttClient.onMessageArrived = (message) => {
+          onMessageCallback(message.payloadString);
+        };
+      }
+
+      mqttClient.connect({
+        useSSL: true,
+        timeout: 5,
+        onSuccess: () => {
+          mqttClient.subscribe(topic);
+        },
+        onFailure: () => {
+          setTimeout(() => connectMQTT(topic, onMessageCallback), 3000);
+        }
+      });
+    }
+
+    function publishMessage(obj) {
+      if (!mqttClient || !mqttClient.isConnected()) return;
+      const message = new Paho.MQTT.Message(JSON.stringify(obj));
+      message.destinationName = `class-poetry-${roomCode}`;
+      mqttClient.send(message);
+    }
+  </script>
+</body>
+</html>
